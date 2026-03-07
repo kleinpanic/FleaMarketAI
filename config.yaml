@@ -1,0 +1,76 @@
+# Provider configuration for FleaMarket-AI validation endpoints.
+# validate.py reads this at import time.
+
+providers:
+  openai:
+    test_endpoint: "https://api.openai.com/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  anthropic:
+    # /v1/complete is deprecated — use /v1/messages
+    test_endpoint: "https://api.anthropic.com/v1/messages"
+    header_name: "x-api-key"
+    api_version: "2023-06-01"
+
+  gemini:
+    # Requires POST with content body — bare GET returns 405
+    test_endpoint: "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+    header_name: "x-goog-api-key"
+
+  groq:
+    test_endpoint: "https://api.groq.com/openai/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  xai:
+    test_endpoint: "https://api.x.ai/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  replicate:
+    test_endpoint: "https://api.replicate.com/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Token "
+
+  perplexity:
+    test_endpoint: "https://api.perplexity.ai/chat/completions"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  huggingface:
+    test_endpoint: "https://huggingface.co/api/whoami"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  kimi:
+    test_endpoint: "https://api.moonshot.cn/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  openrouter:
+    test_endpoint: "https://openrouter.ai/api/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  amazon_bedrock:
+    # AWS SigV4 requires both access key ID + secret — cannot fully validate.
+    # We probe STS to determine if the key ID is real (see validate.py).
+    test_endpoint: "https://sts.amazonaws.com/"
+
+  azure_oauth:
+    # Stage 1: JWT issuer must be Azure AD (sts.windows.net or login.microsoftonline.com)
+    # Stage 2: probe Azure Management API — 200 or 403 both confirm live token
+    test_endpoint: "https://management.azure.com/subscriptions?api-version=2020-01-01"
+
+  google_oauth:
+    test_endpoint: "https://www.googleapis.com/oauth2/v3/tokeninfo"
+
+  github_oauth:
+    test_endpoint: "https://api.github.com/user"
+
+  codex:
+    # Codex keys use the standard OpenAI sk- format — reuse OpenAI validator
+    test_endpoint: "https://api.openai.com/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "

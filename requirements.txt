@@ -1,0 +1,5 @@
+requests
+PyYAML
+PyGithub
+# sqlite3 builtin (no pip package)
+python-dotenv

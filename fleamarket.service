@@ -1,0 +1,14 @@
+[Unit]
+Description=FleaMarket‑AI – AI API key hunter & validator
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/broklein/codeWS/Python/FleaMarketAI
+ExecStart=/home/broklein/codeWS/Python/FleaMarketAI/start.sh
+EnvironmentFile=/home/broklein/codeWS/Python/FleaMarketAI/.env
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=default.target

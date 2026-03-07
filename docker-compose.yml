@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - VPN_SERVICE_PROVIDER=custom   # you can set a provider later
+      - TZ=America/New_York
+    ports:
+      - "3128:3128"   # optional HTTP proxy port
+    volumes:
+      - ./gluetun/config:/gluetun
+    restart: unless-stopped
+
+  flea_market_ai:
+    build: .
+    container_name: flea_market_ai
+    depends_on:
+      - gluetun
+    network_mode: service:gluetun   # route all traffic via gluetun
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./logs:/app/logs
+      - ./db:/app/db
+    restart: unless-stopped
