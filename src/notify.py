@@ -4,10 +4,8 @@ Calls the configured webhook URL with a JSON payload whenever a new
 valid key is stored.
 """
 
-import json
 import os
 import requests
-from pathlib import Path
 
 # Load webhook from env or config.yaml (env overrides)
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")

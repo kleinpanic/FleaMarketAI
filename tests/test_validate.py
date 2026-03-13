@@ -1,5 +1,4 @@
 """Unit tests for validate.py — no live API calls."""
-import pytest
 import sys
 import os
 
@@ -18,8 +17,8 @@ class TestIsPlaceholder:
     def test_real_looking_key(self):
         assert not _is_placeholder("sk-abcDEF123xyz987QRS456tuv789WXY012mno345PQR678stu")
 
-    def test_short_key(self):
-        assert _is_placeholder("sk-tooshort")
+    def test_all_same_chars(self):
+        assert _is_placeholder("sk-" + "z" * 48)
 
 
 class TestValidatorsRegistered:
@@ -45,7 +44,7 @@ class TestPatternMatching:
         assert pattern is not None
         # sk-or-v1- style key
         key = "sk-or-v1-" + "a" * 64
-        assert re.search(pattern, key), f"Pattern should match sk-or-v1- key"
+        assert re.search(pattern, key), "Pattern should match sk-or-v1- key"
 
     def test_openrouter_pub_pattern(self):
         import re

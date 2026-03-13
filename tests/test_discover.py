@@ -1,7 +1,7 @@
 """Unit tests for discover.py — no live GitHub calls."""
 import re
-import pytest
-import sys, os
+import sys
+import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -37,5 +37,5 @@ class TestPatterns:
 
     def test_openrouter_not_skipped(self):
         """openrouter primary pattern must be searchable."""
-        prefix = PATTERNS["openrouter"][:8]
+        PATTERNS["openrouter"][:8]
         assert "sk-or" not in _SKIP_PREFIXES

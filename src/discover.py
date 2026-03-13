@@ -10,7 +10,6 @@
 """
 
 import re
-import os
 from pathlib import Path
 
 import requests as _requests
@@ -32,7 +31,8 @@ PATTERNS = {
     "replicate":   r"r8_[A-Za-z0-9]{40}",
     "perplexity":  r"pplx-[a-zA-Z0-9]{40,}",
     "huggingface": r"hf_[A-Za-z0-9]{34}",
-    "openrouter":  r"or_[A-Za-z0-9]{40}",
+    "openrouter":     r"sk-or-v1-[A-Za-z0-9_\-]{64,}",  # Full-access credited keys
+    "openrouter_pub": r"or_[A-Za-z0-9]{40}",              # Public-only tier (model listing only)
     "kimi":        r"sk-[A-Za-z0-9]{40}",          # Moonshot/Kimi keys
     # ── Cloud / infra ─────────────────────────────────────────────────────────
     "amazon_bedrock": r"AKIA[0-9A-Z]{16}",

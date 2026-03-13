@@ -240,15 +240,44 @@ def validate_kimi(key):
 # ---------------------------------------------------------------------------
 
 def validate_openrouter(key):
-    cfg = PROVIDERS["openrouter"]
-    headers = _make_auth_header(cfg["header_name"], cfg.get("header_prefix", ""), key)
+    """Validate sk-or-v1-* keys by testing actual chat completions."""
     try:
-        r = _SESSION.get(cfg["test_endpoint"], headers=headers, timeout=10)
+        r = _SESSION.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/kleinpanic/FleaMarketAI",
+            },
+            json={
+                "model": "openai/gpt-4o-mini",
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,
+            },
+            timeout=15,
+        )
         if r.status_code == 200:
-            return True, "OpenRouter key works"
+            return True, "OpenRouter key valid (completions confirmed)"
+        if r.status_code == 402:
+            return False, "OpenRouter key valid but no credits (402)"
         return False, f"OpenRouter returned {r.status_code}: {r.text[:80]}"
     except Exception as e:
         return False, f"OpenRouter error: {e}"
+
+
+def validate_openrouter_pub(key):
+    """Validate or_* public-tier keys — these can only list models, never completions."""
+    try:
+        r = _SESSION.get(
+            "https://openrouter.ai/api/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return False, "OpenRouter PUBLIC key only (model listing only, no completions — needs sk-or-v1-)"
+        return False, f"OpenRouter pub returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"OpenRouter pub error: {e}"
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +412,7 @@ VALIDATORS = {
     "huggingface":     validate_huggingface,
     "kimi":            validate_kimi,
     "openrouter":      validate_openrouter,
+    "openrouter_pub":  validate_openrouter_pub,
     "amazon_bedrock":  validate_amazon_bedrock,
     "azure_oauth":     validate_azure_oauth,
     "google_oauth":    validate_google_oauth,
