@@ -10,7 +10,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import discover, queue
+from . import discover as discover_module, queue
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
@@ -47,7 +47,7 @@ def main():
     
     try:
         # Find candidates
-        discoveries = discover.find_candidates()
+        discoveries = discover_module.discover_keys()
         
         if not discoveries:
             log.info("No new candidates found")

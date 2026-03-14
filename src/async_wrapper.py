@@ -19,6 +19,33 @@ log = logging.getLogger(__name__)
 _executor = ThreadPoolExecutor(max_workers=5)
 
 
+class AsyncValidator:
+    """Async validator with rate limiting and concurrency control.
+    
+    Usage:
+        async with AsyncValidator(max_concurrent=5, global_rpm=30) as validator:
+            is_valid, message = await validator.validate(key, provider)
+    """
+    
+    def __init__(self, max_concurrent: int = 5, global_rpm: int = 30):
+        self.max_concurrent = max_concurrent
+        self.global_rpm = global_rpm
+        self.semaphore = asyncio.Semaphore(max_concurrent)
+        self.rate_limiter = RateLimiter(global_rpm=global_rpm)
+    
+    async def validate(self, key: str, provider: str) -> Tuple[bool, str]:
+        """Validate a single key with rate limiting."""
+        async with self.semaphore:
+            return await validate_with_rate_limit(key, provider, self.rate_limiter)
+    
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        shutdown()
+        return False
+
+
 async def validate_with_rate_limit(
     key: str,
     provider: str,

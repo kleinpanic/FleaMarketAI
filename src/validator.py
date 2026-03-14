@@ -53,9 +53,7 @@ async def process_job(validator, job) -> bool:
     
     try:
         # Validate with rate limiting
-        is_valid, message = await async_wrapper.validate_with_rate_limit(
-            job.key, job.provider, validator
-        )
+        is_valid, message = await validator.validate(job.key, job.provider)
         
         # Record in database
         db.upsert_key(
