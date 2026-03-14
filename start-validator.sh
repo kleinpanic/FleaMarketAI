@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start-validator.sh — FleaMarketAI v2 Validation Service
+# start-validator.sh — FleaMarketAI v2 Validation Service (Phase 2)
 # Runs continuously, processing validation queue
 
 set -euo pipefail

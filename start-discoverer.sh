@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start-discoverer.sh — FleaMarketAI v2 Discovery Run
+# start-discoverer.sh — FleaMarketAI v2 Discovery Run (Phase 2)
 # Runs once, enqueues new keys for validation
 
 set -euo pipefail
@@ -14,4 +14,4 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
 
-exec python3 -m src.discover
+exec python3 -m src.discoverer

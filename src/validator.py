@@ -1,13 +1,7 @@
 """FleaMarketAI v2 Validator Service
 
-Continuously processes the validation queue with rate limiting.
-Respects:
-- Don't re-validate known-invalid keys
-- Rate limits per provider
-- Max concurrent validations
-
-Usage:
-    python -m src.validator
+Phase 2: Continuously processes validation queue with rate limiting.
+Runs as a service (always on).
 """
 
 import asyncio
@@ -17,7 +11,7 @@ import sys
 import traceback
 from pathlib import Path
 
-from . import db, async_validate, notify
+from . import queue, db, async_wrapper, notify
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
@@ -31,7 +25,7 @@ _fmt = logging.Formatter(
 
 _file_handler = logging.handlers.RotatingFileHandler(
     LOG_FILE,
-    maxBytes=5 * 1024 * 1024,  # 5 MB per file
+    maxBytes=5 * 1024 * 1024,
     backupCount=3,
 )
 _file_handler.setFormatter(_fmt)
@@ -44,90 +38,96 @@ log.setLevel(logging.INFO)
 log.addHandler(_file_handler)
 log.addHandler(_console_handler)
 
-# Also log ratelimit and async_validate
+# Also capture ratelimit logs
 logging.getLogger("src.ratelimit").setLevel(logging.INFO)
 logging.getLogger("src.ratelimit").addHandler(_file_handler)
-logging.getLogger("src.async_validate").setLevel(logging.DEBUG)
-logging.getLogger("src.async_validate").addHandler(_file_handler)
 
 
-async def process_key(validator: async_validate.AsyncValidator, key_record: dict) -> bool:
-    """Process a single key validation.
+async def process_job(validator, job) -> bool:
+    """Process a single validation job.
     
-    Args:
-        validator: The AsyncValidator instance
-        key_record: Key record from database
-        
-    Returns:
-        True if processed successfully, False on error
+    Returns True if job completed (success or permanent failure).
     """
-    key_id = key_record['id']
-    provider = key_record['provider']
+    log.info("Validating %s key from %s (job=%d, attempt=%d)", 
+             job.provider, job.source_url, job.id, job.attempts + 1)
     
-    # Retrieve the actual key (we need to store it temporarily or pass it)
-    # For now, we'll need to store keys in a separate lookup or use the original
-    # This is a limitation of the hash-based approach
-    
-    # NOTE: In the current implementation, we don't have the original key
-    # This needs to be addressed - either:
-    # 1. Store keys encrypted (safer)
-    # 2. Pass keys through a secure queue
-    # 3. Keep original key in memory only during discovery
-    
-    # For Phase 1, we'll use a simpler approach: pass keys directly from discoverer
-    # to validator via the queue, not storing them in DB
-    
-    log.warning("Cannot validate key_id=%d: original key not stored (hash-only)", key_id)
-    return False
+    try:
+        # Validate with rate limiting
+        is_valid, message = await async_wrapper.validate_with_rate_limit(
+            job.key, job.provider, validator
+        )
+        
+        # Record in database
+        db.upsert_key(
+            job.provider, 
+            job.key, 
+            job.source_url,
+            is_valid=is_valid,
+            validation_msg=message
+        )
+        
+        if is_valid:
+            log.info("✓ Valid %s key found!", job.provider)
+            notify.send_notification(job.provider, job.key, job.source_url, message)
+            return True
+        else:
+            log.debug("✗ Invalid %s key: %s", job.provider, message[:80])
+            return True
+            
+    except Exception as e:
+        log.exception("Error validating %s key", job.provider)
+        return False
 
 
 async def validator_loop():
-    """Main validator loop.
-    
-    Continuously:
-    1. Check for keys needing validation
-    2. Validate with rate limiting
-    3. Record results
-    4. Sleep if no work
-    """
+    """Main validator loop - continuously process queue."""
     log.info("=== FleaMarketAI v2 Validator Started ===")
     
-    # Initialize database
+    # Initialize
+    queue.init_queue_tables()
     db.init_db()
     
-    async with async_validate.AsyncValidator(max_concurrent=5, global_rpm=30) as validator:
+    async with async_wrapper.AsyncValidator(max_concurrent=5, global_rpm=30) as validator:
+        consecutive_empty = 0
+        
         while True:
             try:
-                # Get keys needing validation
-                keys = db.get_keys_needing_validation(limit=10)
+                # Check for stuck jobs periodically
+                if consecutive_empty % 10 == 0:
+                    stuck = queue.requeue_stuck_jobs(max_age_minutes=30)
+                    if stuck:
+                        log.info("Re-queued %d stuck jobs", stuck)
                 
-                if not keys:
-                    log.debug("No keys to validate, sleeping...")
-                    await asyncio.sleep(10)
+                # Get next job
+                job = queue.dequeue(worker_id="validator-1")
+                
+                if job is None:
+                    consecutive_empty += 1
+                    
+                    # Log stats every 10 empty cycles
+                    if consecutive_empty % 10 == 0:
+                        stats = queue.get_queue_stats()
+                        log.info("Queue status: %d pending, %d processing", 
+                                stats['total_pending'], stats['processing'])
+                    
+                    await asyncio.sleep(5)
                     continue
                 
-                log.info("Found %d keys to validate", len(keys))
+                consecutive_empty = 0
                 
-                # Process each key
-                for key_record in keys:
-                    # Skip if shouldn't validate (e.g., recently checked)
-                    if not db.should_validate(key_record['id']):
-                        log.debug("Skipping key_id=%d (not due for validation)", key_record['id'])
-                        continue
-                    
-                    # Validate
-                    success = await process_key(validator, key_record)
-                    
-                    if not success:
-                        log.warning("Failed to process key_id=%d", key_record['id'])
+                # Process job
+                success = await process_job(validator, job)
                 
-                # Small pause between batches
-                await asyncio.sleep(1)
+                # Complete job (remove if success, retry if failed)
+                queue.complete_job(job.id, success=success)
+                
+                # Small pause between jobs
+                await asyncio.sleep(0.5)
                 
             except Exception as e:
                 log.error("Error in validator loop: %s", e)
                 log.debug(traceback.format_exc())
-                await asyncio.sleep(30)  # Longer sleep on error
+                await asyncio.sleep(30)
 
 
 def main():
