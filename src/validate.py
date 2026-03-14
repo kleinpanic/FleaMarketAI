@@ -398,6 +398,122 @@ def validate_codex(key):
 
 
 # ---------------------------------------------------------------------------
+# Cohere
+# ---------------------------------------------------------------------------
+
+def validate_cohere(key):
+    """List models — lightweight, no cost."""
+    try:
+        r = _SESSION.get(
+            "https://api.cohere.com/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True, "Cohere key works"
+        return False, f"Cohere returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"Cohere error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Mistral AI
+# ---------------------------------------------------------------------------
+
+def validate_mistral(key):
+    """List models via Mistral's OpenAI-compatible endpoint."""
+    try:
+        r = _SESSION.get(
+            "https://api.mistral.ai/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True, "Mistral key works"
+        return False, f"Mistral returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"Mistral error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Together AI
+# ---------------------------------------------------------------------------
+
+def validate_together(key):
+    """List models via Together's OpenAI-compatible endpoint."""
+    try:
+        r = _SESSION.get(
+            "https://api.together.xyz/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True, "Together AI key works"
+        return False, f"Together returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"Together error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Stability AI
+# ---------------------------------------------------------------------------
+
+def validate_stability(key):
+    """Check user account/balance endpoint."""
+    try:
+        r = _SESSION.get(
+            "https://api.stability.ai/v1/user/balance",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            credits = data.get("credits", "unknown")
+            return True, f"Stability key works (credits: {credits})"
+        return False, f"Stability returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"Stability error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# AI21 Labs
+# ---------------------------------------------------------------------------
+
+def validate_ai21(key):
+    """List models via AI21's API."""
+    try:
+        r = _SESSION.get(
+            "https://api.ai21.com/studio/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True, "AI21 key works"
+        return False, f"AI21 returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"AI21 error: {e}"
+
+
+# ---------------------------------------------------------------------------
+# DeepSeek
+# ---------------------------------------------------------------------------
+
+def validate_deepseek(key):
+    """List models via DeepSeek's OpenAI-compatible endpoint."""
+    try:
+        r = _SESSION.get(
+            "https://api.deepseek.com/v1/models",
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return True, "DeepSeek key works"
+        return False, f"DeepSeek returned {r.status_code}: {r.text[:80]}"
+    except Exception as e:
+        return False, f"DeepSeek error: {e}"
+
+
+# ---------------------------------------------------------------------------
 # Dispatch table
 # ---------------------------------------------------------------------------
 
@@ -418,6 +534,12 @@ VALIDATORS = {
     "google_oauth":    validate_google_oauth,
     "github_oauth":    validate_github_oauth,
     "codex":           validate_codex,
+    "cohere":          validate_cohere,
+    "mistral":         validate_mistral,
+    "together":        validate_together,
+    "stability":       validate_stability,
+    "ai21":            validate_ai21,
+    "deepseek":        validate_deepseek,
 }
 
 

@@ -74,3 +74,34 @@ providers:
     test_endpoint: "https://api.openai.com/v1/models"
     header_name: "Authorization"
     header_prefix: "Bearer "
+
+  # Phase 3: New Providers
+  cohere:
+    test_endpoint: "https://api.cohere.com/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  mistral:
+    test_endpoint: "https://api.mistral.ai/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  together:
+    test_endpoint: "https://api.together.xyz/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  stability:
+    test_endpoint: "https://api.stability.ai/v1/user/balance"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  ai21:
+    test_endpoint: "https://api.ai21.com/studio/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "
+
+  deepseek:
+    test_endpoint: "https://api.deepseek.com/v1/models"
+    header_name: "Authorization"
+    header_prefix: "Bearer "

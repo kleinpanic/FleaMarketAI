@@ -34,6 +34,13 @@ PATTERNS = {
     "openrouter":     r"sk-or-v1-[A-Za-z0-9_\-]{64,}",  # Full-access credited keys
     "openrouter_pub": r"or_[A-Za-z0-9]{40}",              # Public-only tier (model listing only)
     "kimi":        r"sk-[A-Za-z0-9]{40}",          # Moonshot/Kimi keys
+    # ── Phase 3: New Providers ────────────────────────────────────────────────
+    "cohere":      r"cohere-[A-Za-z0-9]{40,}",      # Cohere API keys
+    "mistral":     r"[A-Za-z0-9]{32}",              # Mistral keys (32 char alphanumeric)
+    "together":    r"together-[A-Za-z0-9]{40,}",     # Together AI keys
+    "stability":   r"sk-[A-Za-z0-9]{48}",           # Stability AI uses sk- pattern
+    "ai21":        r"ai21-[A-Za-z0-9]{40,}",        # AI21 Labs keys
+    "deepseek":    r"sk-ds-[A-Za-z0-9]{48}",        # DeepSeek keys
     # ── Cloud / infra ─────────────────────────────────────────────────────────
     "amazon_bedrock": r"AKIA[0-9A-Z]{16}",
     # ── OAuth tokens ─────────────────────────────────────────────────────────
@@ -47,7 +54,7 @@ PATTERNS = {
 # Providers whose literal prefix is too short / generic to use in GitHub code
 # search (would return millions of noise results).  They are still matched
 # during gist content scanning.
-_SKIP_CODE_SEARCH = {"azure_oauth", "google_oauth"}
+_SKIP_CODE_SEARCH = {"azure_oauth", "google_oauth", "mistral", "stability"}
 
 # Literal prefixes that are too broad for code search regardless of length.
 # e.g. "sk-" → millions of Stripe, OpenAI, and other results combined.
