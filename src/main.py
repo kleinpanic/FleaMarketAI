@@ -1,23 +1,26 @@
-"""Main orchestrator for FleaMarket-AI.
+"""Main orchestrator for FleaMarket-AI v2 (Phase 1).
 
-1. Initialise DB.
-2. Discover candidate keys (public GitHub search, gists, etc.).
-3. Validate each key via provider-specific logic.
-4. Persist results.
-5. Send Discord webhook on successful finds.
-6. Sleep 4 hours and repeat forever.
+Changes from v1:
+- Async validation with rate limiting (30 req/min max)
+- Skip re-validating known-invalid keys
+- Max 5 concurrent validations
+- Validation history tracking
+
+Usage:
+    python -m src.main
 """
 
+import asyncio
 import logging
 import logging.handlers
 import os
-import time
+import sys
 import traceback
 from pathlib import Path
 
-from . import db, discover, validate, notify
+from . import db, discover, async_wrapper, notify
 
-# ── Logging setup ──────────────────────────────────────────────────────────────
+# ── Logging setup ─────────────────────────────────────────────────────────────
 LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOG_FILE = LOG_DIR / "fleamarket.log"
@@ -29,84 +32,177 @@ _fmt = logging.Formatter(
 
 _file_handler = logging.handlers.RotatingFileHandler(
     LOG_FILE,
-    maxBytes=5 * 1024 * 1024,   # 5 MB per file
-    backupCount=5,               # keep fleamarket.log + 5 rotations
-    encoding="utf-8",
+    maxBytes=5 * 1024 * 1024,  # 5 MB per file
+    backupCount=5,
 )
 _file_handler.setFormatter(_fmt)
 
-_console_handler = logging.StreamHandler()
+_console_handler = logging.StreamHandler(sys.stdout)
 _console_handler.setFormatter(_fmt)
 
-log = logging.getLogger("fleamarket")
+log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 log.addHandler(_file_handler)
 log.addHandler(_console_handler)
 
-# Sleep interval – override via SCAN_INTERVAL_SECONDS env var (seconds)
-SLEEP_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", str(4 * 3600)))
+# Also capture logs from other modules
+logging.getLogger("src.ratelimit").setLevel(logging.INFO)
+logging.getLogger("src.ratelimit").addHandler(_file_handler)
+logging.getLogger("src.async_wrapper").setLevel(logging.DEBUG)
+logging.getLogger("src.async_wrapper").addHandler(_file_handler)
 
 
-def run_once():
-    db.init_db()
+# Configuration
+SLEEP_SECONDS = 4 * 3600  # 4 hours between discovery runs
+MAX_CONCURRENT = 5        # Max concurrent validations
+GLOBAL_RPM = 30           # Max 30 requests per minute
+SKIP_INVALID = True       # Don't re-validate known-invalid keys
 
-    github_token = os.getenv("GITHUB_TOKEN")
-    if not github_token:
-        log.warning("GITHUB_TOKEN not set – running unauthenticated (60 req/hr limit)")
 
-    discoveries = discover.discover_keys(github_token=github_token)
-
-    if not discoveries:
-        log.info("No new keys discovered this cycle.")
-        return
-
-    log.info("Discovered %d candidate key(s) this cycle.", len(discoveries))
-
-    for entry in discoveries:
-        # Support both 3-tuple (legacy) and 4-tuple (current) discovery formats
-        if len(entry) == 4:
-            provider, api_key, source_url, line_num = entry
+async def validate_candidates(candidates: list[tuple], source_url: str) -> dict:
+    """Validate discovered keys with rate limiting.
+    
+    Args:
+        candidates: List of (provider, key) tuples
+        source_url: Source URL for these keys
+        
+    Returns:
+        Stats dict with counts
+    """
+    stats = {"total": 0, "new": 0, "valid": 0, "invalid": 0, "skipped": 0, "errors": 0}
+    
+    # Filter candidates
+    to_validate = []
+    for provider, key in candidates:
+        stats["total"] += 1
+        
+        # Check if we've seen this key before
+        existing = db.get_key_by_hash(key, provider)
+        if existing:
+            # Skip if already invalid (unless forced)
+            if SKIP_INVALID and existing.get("is_valid") == 0:
+                log.debug("Skipping known-invalid %s key", provider)
+                stats["skipped"] += 1
+                continue
+            # Skip if recently validated (within 24 hours)
+            last_validated = existing.get("last_validated")
+            if last_validated:
+                from datetime import datetime, timedelta
+                try:
+                    last = datetime.fromisoformat(last_validated)
+                    if datetime.utcnow() - last < timedelta(hours=24):
+                        log.debug("Skipping recently-validated %s key", provider)
+                        stats["skipped"] += 1
+                        continue
+                except:
+                    pass
         else:
-            provider, api_key, source_url = entry
-            line_num = None
+            # New key - insert into DB
+            db.upsert_key(provider, key, source_url, is_valid=None, validation_msg=None)
+            stats["new"] += 1
+        
+        to_validate.append((key, provider))
+    
+    if not to_validate:
+        log.info("No keys to validate (all skipped or already known)")
+        return stats
+    
+    log.info("Validating %d keys (skipped %d known/invalid)", 
+             len(to_validate), stats["skipped"])
+    
+    # Validate with async wrapper
+    results = await async_wrapper.validate_batch(
+        to_validate,
+        max_concurrent=MAX_CONCURRENT,
+        global_rpm=GLOBAL_RPM
+    )
+    
+    # Process results
+    for key, provider, is_valid, message in results:
+        # Update DB
+        db.upsert_key(provider, key, source_url, is_valid=is_valid, validation_msg=message)
+        
+        if is_valid:
+            stats["valid"] += 1
+            log.info("✓ Valid %s key found!", provider)
+            # Notify on Discord
+            notify.send_notification(provider, key, source_url, message)
+        else:
+            stats["invalid"] += 1
+            log.debug("✗ Invalid %s key: %s", provider, message[:50])
+    
+    return stats
 
-        # Skip if we already have a confirmed-valid record for this exact key
-        existing = db.get_all_keys()
-        already_valid = any(
-            e["provider"] == provider and e["api_key"] == api_key and e.get("is_valid")
-            for e in existing
-        )
-        if already_valid:
-            log.info("Skip duplicate valid %s key from %s", provider.upper(), source_url)
-            continue
 
-        try:
-            is_valid, msg = validate.validate_provider(provider, api_key)
-            db.upsert_key(provider, api_key, source_url, is_valid, msg)
-            status = "VALID  ✓" if is_valid else "INVALID"
-            log.info("%s | %s | %s | %s", provider.upper().ljust(16), status, source_url, msg)
+async def run_once():
+    """Run one discovery + validation cycle."""
+    log.info("=== Starting discovery cycle ===")
+    
+    # Discover candidates
+    discoveries = discover.find_candidates()
+    
+    if not discoveries:
+        log.info("No new candidates found this cycle")
+        return
+    
+    log.info("Discovered %d candidate key(s)", len(discoveries))
+    
+    # Group by source for better logging
+    by_source = {}
+    for provider, key, source in discoveries:
+        by_source.setdefault(source, []).append((provider, key))
+    
+    # Validate each source's keys
+    total_stats = {"total": 0, "new": 0, "valid": 0, "invalid": 0, "skipped": 0}
+    
+    for source_url, candidates in by_source.items():
+        log.info("Processing %d keys from %s", len(candidates), source_url)
+        stats = await validate_candidates(candidates, source_url)
+        
+        for k in total_stats:
+            total_stats[k] += stats.get(k, 0)
+    
+    log.info(
+        "Cycle complete: %d total, %d new, %d valid, %d invalid, %d skipped",
+        total_stats["total"],
+        total_stats["new"],
+        total_stats["valid"],
+        total_stats["invalid"],
+        total_stats["skipped"]
+    )
 
-            if is_valid:
-                ok, note = notify.send_notification(provider, api_key, source_url, msg, line_num)
-                if ok:
-                    log.info("Discord webhook sent for %s key.", provider)
-                else:
-                    log.warning("Discord webhook failed: %s", note)
-        except Exception as e:
-            log.error("Error processing %s key from %s: %s", provider, source_url, e)
-            log.debug(traceback.format_exc())
+
+async def main_async():
+    """Main async entry point."""
+    log.info("=== FleaMarket-AI v2 started (interval=%.1fh) ===", SLEEP_SECONDS / 3600)
+    
+    # Initialize database
+    db.init_db()
+    
+    try:
+        while True:
+            try:
+                await run_once()
+            except Exception as e:
+                log.error("Error in cycle: %s", e)
+                log.debug(traceback.format_exc())
+            
+            log.info("Sleeping for %.1fh ...", SLEEP_SECONDS / 3600)
+            await asyncio.sleep(SLEEP_SECONDS)
+    finally:
+        async_wrapper.shutdown()
 
 
 def main():
-    log.info("=== FleaMarket-AI started (interval=%.1fh) ===", SLEEP_SECONDS / 3600)
-    while True:
-        try:
-            run_once()
-        except Exception as e:
-            log.error("Unexpected error in cycle: %s", e)
-            log.debug(traceback.format_exc())
-        log.info("Sleeping for %.1fh ...", SLEEP_SECONDS / 3600)
-        time.sleep(SLEEP_SECONDS)
+    """Entry point."""
+    try:
+        asyncio.run(main_async())
+    except KeyboardInterrupt:
+        log.info("Shutdown requested")
+    except Exception as e:
+        log.error("Fatal error: %s", e)
+        log.debug(traceback.format_exc())
+        sys.exit(1)
 
 
 if __name__ == "__main__":
