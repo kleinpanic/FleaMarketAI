@@ -140,8 +140,9 @@ async def run_once():
     """Run one discovery + validation cycle."""
     log.info("=== Starting discovery cycle ===")
     
-    # Discover candidates
-    discoveries = discover.discover_keys()
+    # Discover candidates (pass GitHub token for authenticated code search)
+    github_token = os.getenv("GITHUB_TOKEN")
+    discoveries = discover.discover_keys(github_token=github_token)
     
     if not discoveries:
         log.info("No new candidates found this cycle")
