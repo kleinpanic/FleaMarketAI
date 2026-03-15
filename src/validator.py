@@ -72,7 +72,7 @@ async def process_job(validator, job) -> bool:
             log.debug("✗ Invalid %s key: %s", job.provider, message[:80])
             return True
             
-    except Exception as e:
+    except Exception:
         log.exception("Error validating %s key", job.provider)
         return False
 

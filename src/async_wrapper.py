@@ -8,7 +8,7 @@ import asyncio
 import functools
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Tuple
+from typing import Tuple
 
 from . import validate as sync_validate
 from .ratelimit import RateLimiter

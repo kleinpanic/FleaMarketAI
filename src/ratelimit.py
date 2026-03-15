@@ -147,9 +147,9 @@ class RateLimiter:
                         await asyncio.sleep(sleep_time)
                         now = datetime.now()
             
-            # Check per-provider limits
-            provider_limits = self._get_provider_limits(provider)
-            provider_requests = [t for t in self._request_times if t > cutoff_hour]
+            # Check per-provider limits (placeholder for future implementation)
+            # provider_limits = self._get_provider_limits(provider)
+            # provider_requests = [t for t in self._request_times if t > cutoff_hour]
             # Note: We're not tracking per-provider separately in _request_times
             # For simplicity, we rely on global limits + circuit breaker
             

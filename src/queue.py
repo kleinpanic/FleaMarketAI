@@ -6,12 +6,11 @@ No Redis needed - everything in SQLite.
 """
 
 import datetime
-import json
 import logging
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 DB_PATH = Path(__file__).resolve().parents[1] / "db" / "keys.db"
 log = logging.getLogger(__name__)
@@ -418,7 +417,7 @@ def record_metrics():
         # Get processed count from last hour
         one_hour_ago = (datetime.datetime.utcnow() - 
                        datetime.timedelta(hours=1)).isoformat()
-        cur = conn.execute(
+        conn.execute(
             """
             SELECT COUNT(*) FROM queue_metrics 
             WHERE recorded_at > ?

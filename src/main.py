@@ -13,7 +13,6 @@ Usage:
 import asyncio
 import logging
 import logging.handlers
-import os
 import sys
 import traceback
 from pathlib import Path
@@ -95,7 +94,7 @@ async def validate_candidates(candidates: list[tuple], source_url: str, line_num
                         log.debug("Skipping recently-validated %s key", provider)
                         stats["skipped"] += 1
                         continue
-                except:
+                except Exception:
                     pass
         else:
             # New key - insert into DB
