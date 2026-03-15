@@ -139,7 +139,7 @@ async def run_once():
     log.info("=== Starting discovery cycle ===")
     
     # Discover candidates
-    discoveries = discover.find_candidates()
+    discoveries = discover.discover_keys()
     
     if not discoveries:
         log.info("No new candidates found this cycle")
