@@ -59,12 +59,13 @@ GLOBAL_RPM = 30           # Max 30 requests per minute
 SKIP_INVALID = True       # Don't re-validate known-invalid keys
 
 
-async def validate_candidates(candidates: list[tuple], source_url: str) -> dict:
+async def validate_candidates(candidates: list[tuple], source_url: str, line_numbers: dict = None) -> dict:
     """Validate discovered keys with rate limiting.
     
     Args:
         candidates: List of (provider, key) tuples
         source_url: Source URL for these keys
+        line_numbers: Dict mapping (source_url, provider, key) -> line_num
         
     Returns:
         Stats dict with counts
@@ -126,7 +127,8 @@ async def validate_candidates(candidates: list[tuple], source_url: str) -> dict:
             stats["valid"] += 1
             log.info("✓ Valid %s key found!", provider)
             # Notify on Discord
-            notify.send_notification(provider, key, source_url, message)
+            line_num = line_numbers.get((source_url, provider, key)) if line_numbers else None
+            notify.send_notification(provider, key, source_url, message, line_num)
         else:
             stats["invalid"] += 1
             log.debug("✗ Invalid %s key: %s", provider, message[:50])
@@ -149,15 +151,17 @@ async def run_once():
     
     # Group by source for better logging
     by_source = {}
-    for provider, key, source in discoveries:
+    line_numbers = {}  # Track line numbers for notifications
+    for provider, key, source, line_num in discoveries:
         by_source.setdefault(source, []).append((provider, key))
+        line_numbers[(source, provider, key)] = line_num
     
     # Validate each source's keys
     total_stats = {"total": 0, "new": 0, "valid": 0, "invalid": 0, "skipped": 0}
     
     for source_url, candidates in by_source.items():
         log.info("Processing %d keys from %s", len(candidates), source_url)
-        stats = await validate_candidates(candidates, source_url)
+        stats = await validate_candidates(candidates, source_url, line_numbers)
         
         for k in total_stats:
             total_stats[k] += stats.get(k, 0)
