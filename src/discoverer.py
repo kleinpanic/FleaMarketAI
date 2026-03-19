@@ -6,6 +6,7 @@ Runs on a schedule (every 4 hours).
 
 import logging
 import logging.handlers
+import os
 import sys
 import traceback
 from pathlib import Path
@@ -41,37 +42,44 @@ log.addHandler(_console_handler)
 def main():
     """Run one discovery cycle and enqueue all found keys."""
     log.info("=== FleaMarketAI v2 Discoverer Started ===")
-    
+
     # Initialize queue tables
     queue.init_queue_tables()
-    
+
     try:
-        # Find candidates
-        discoveries = discover_module.discover_keys()
-        
+        github_token = os.getenv("GITHUB_TOKEN")
+        discoveries = discover_module.discover_keys(github_token=github_token)
+
         if not discoveries:
             log.info("No new candidates found")
             return
-        
+
         log.info("Discovered %d candidate key(s)", len(discoveries))
-        
-        # Enqueue each discovery
+
         enqueued = 0
         skipped = 0
-        
-        for provider, key, source_url in discoveries:
-            # Priority 1 for new finds (will be validated first)
-            if queue.enqueue(key, provider, source_url, priority=1):
+
+        for item in discoveries:
+            # v2 tuple: (provider, key, source_url, line_num)
+            if len(item) == 4:
+                provider, key, source_url, line_num = item
+            elif len(item) == 3:
+                provider, key, source_url = item
+                line_num = None
+            else:
+                log.warning("Skipping malformed discovery tuple: %r", item)
+                skipped += 1
+                continue
+
+            if queue.enqueue(key, provider, source_url, source_line=line_num, priority=1):
                 enqueued += 1
             else:
                 skipped += 1
-        
+
         log.info("Enqueued %d keys (%d already in queue)", enqueued, skipped)
-        
-        # Show queue depth
         depth = queue.get_queue_depth()
         log.info("Queue depth: %d keys waiting for validation", depth)
-        
+
     except Exception as e:
         log.error("Discovery error: %s", e)
         log.debug(traceback.format_exc())

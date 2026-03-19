@@ -72,7 +72,7 @@ async def validate_with_rate_limit(
     await rate_limiter.acquire(provider)
     
     # Run sync validator in thread pool
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         is_valid, message = await loop.run_in_executor(
             _executor,

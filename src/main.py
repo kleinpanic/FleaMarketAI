@@ -81,7 +81,8 @@ async def validate_candidates(candidates: list[tuple], source_url: str, line_num
         existing = db.get_key_by_hash(key, provider)
         if existing:
             # Skip if already invalid (unless forced)
-            if SKIP_INVALID and existing.get("is_valid") == 0:
+            # v2 schema uses 'status' not 'is_valid'
+            if SKIP_INVALID and existing.get("status") == "invalid":
                 log.debug("Skipping known-invalid %s key", provider)
                 stats["skipped"] += 1
                 continue
@@ -158,7 +159,7 @@ async def run_once():
         line_numbers[(source, provider, key)] = line_num
     
     # Validate each source's keys
-    total_stats = {"total": 0, "new": 0, "valid": 0, "invalid": 0, "skipped": 0}
+    total_stats = {"total": 0, "new": 0, "valid": 0, "invalid": 0, "skipped": 0, "errors": 0}
     
     for source_url, candidates in by_source.items():
         log.info("Processing %d keys from %s", len(candidates), source_url)
@@ -168,12 +169,13 @@ async def run_once():
             total_stats[k] += stats.get(k, 0)
     
     log.info(
-        "Cycle complete: %d total, %d new, %d valid, %d invalid, %d skipped",
+        "Cycle complete: %d total, %d new, %d valid, %d invalid, %d skipped, %d errors",
         total_stats["total"],
         total_stats["new"],
         total_stats["valid"],
         total_stats["invalid"],
-        total_stats["skipped"]
+        total_stats["skipped"],
+        total_stats["errors"]
     )
 
 

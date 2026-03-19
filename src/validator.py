@@ -55,18 +55,34 @@ async def process_job(validator, job) -> bool:
         # Validate with rate limiting
         is_valid, message = await validator.validate(job.key, job.provider)
         
+        # Determine prior state so notifications can clearly differentiate
+        existing = db.get_key_by_hash(job.key, job.provider)
+        previous_status = existing.get("status") if existing else None
+
         # Record in database
         db.upsert_key(
-            job.provider, 
-            job.key, 
+            job.provider,
+            job.key,
             job.source_url,
             is_valid=is_valid,
             validation_msg=message
         )
-        
+
         if is_valid:
-            log.info("✓ Valid %s key found!", job.provider)
-            notify.send_notification(job.provider, job.key, job.source_url, message)
+            origin = "revalidation" if getattr(job, "priority", 1) >= 5 else "discovery"
+            event_type = "revalidated_valid" if previous_status == "valid" else "new_valid"
+            log.info("✓ Valid %s key found! (%s)", job.provider, event_type)
+            notify.send_notification(
+                job.provider,
+                job.key,
+                job.source_url,
+                message,
+                job.source_line,
+                origin=origin,
+                event_type=event_type,
+                job_id=job.id,
+                attempt=job.attempts + 1,
+            )
             return True
         else:
             log.debug("✗ Invalid %s key: %s", job.provider, message[:80])

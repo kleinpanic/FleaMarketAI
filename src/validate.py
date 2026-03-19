@@ -17,7 +17,8 @@ import requests
 import yaml
 from pathlib import Path
 
-CONFIG = yaml.safe_load(open(Path(__file__).resolve().parents[1] / "config.yaml"))
+with open(Path(__file__).resolve().parents[1] / "config.yaml") as _cfg_f:
+    CONFIG = yaml.safe_load(_cfg_f)
 PROVIDERS = CONFIG.get("providers", {})
 
 _SESSION = requests.Session()
@@ -259,7 +260,7 @@ def validate_openrouter(key):
         if r.status_code == 200:
             return True, "OpenRouter key valid (completions confirmed)"
         if r.status_code == 402:
-            return False, "OpenRouter key valid but no credits (402)"
+            return False, "OpenRouter key exists but has no credits — cannot confirm completions (402)"
         return False, f"OpenRouter returned {r.status_code}: {r.text[:80]}"
     except Exception as e:
         return False, f"OpenRouter error: {e}"
